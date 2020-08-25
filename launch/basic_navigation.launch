@@ -1,0 +1,11 @@
+<launch>
+	<node name="point_cloud_extraction" type="pcl_extracter_node" pkg="drone_navigation">
+		<remap from="input" to="/firefly/vi_sensor/camera_depth/depth/points"/>
+	</node>
+	<node name="collision_checker" type="collision_checker_node" pkg="drone_navigation">
+		<remap from="input" to="/points"/>
+	</node>
+	<node name="planner" type="rrt.py" pkg="drone_navigation" output="screen"/>
+	<node name="trajectory_optimiser" type="trajectory_optimiser.py" pkg="drone_navigation" output="log"/>
+	<node name="commander" type="commander_node" pkg="drone_navigation" output="screen"/>
+</launch>

@@ -6,7 +6,7 @@ from mpl_toolkits import mplot3d
 from drone_navigation.srv import PointQuery, PointQueryRequest, PointQueryResponse
 from drone_navigation.srv import TrajectoryQuery, TrajectoryQueryRequest, TrajectoryQueryResponse
 from drone_navigation.srv import Planner, PlannerRequest, PlannerResponse
-from drone_navigation.srv import TrajectoryOptimiser, TrajectoryOptimiserRequest
+from drone_navigation.srv import PathOptimiser, PathOptimiserRequest
 import rospy
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, PoseArray
 from nav_msgs.msg import Path
@@ -100,7 +100,7 @@ class RRT():
         self.dim = dim
         self.planning_service = rospy.Service("rrt_planner", Planner, self.__call__)
         self.path_pub = rospy.Publisher("/rrt_path", Path, queue_size=10)
-        self.optimiser = rospy.ServiceProxy("trajectory_optimiser", TrajectoryOptimiser)
+        self.optimiser = rospy.ServiceProxy("trajectory_optimiser", PathOptimiser)
         self.optim_path_pub = rospy.Publisher("optim_path", Path, queue_size=10)
         
 
@@ -180,7 +180,7 @@ class RRT():
 
         
 
-        optim_req = TrajectoryOptimiserRequest()
+        optim_req = PathOptimiserRequest()
         optim_req.crude_path = path_msg;
         optim_resp = self.optimiser(optim_req)
         response.path = optim_resp.optimised_path

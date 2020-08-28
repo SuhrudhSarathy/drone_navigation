@@ -77,12 +77,10 @@
   <exec_depend>libpcl-all</exec_depend>
   <build_depend>geometry_msgs</build_depend>
   <exec_depend>geometry_msgs</exec_depend>
-  <!--
   <depend>mav_trajectory_generation</depend>
   <depend>eigen_checks</depend>
   <depend>mav_trajectory_generation_ros</depend>
   <depend>mav_planning_msgs</depend>
--->
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->

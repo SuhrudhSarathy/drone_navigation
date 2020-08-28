@@ -12,6 +12,16 @@
 #include<geometry_msgs/PoseStamped.h>
 #include<trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 #include<trajectory_msgs/MultiDOFJointTrajectory.h>
+#include<mav_trajectory_generation/polynomial_optimization_nonlinear.h>
+#include<mav_trajectory_generation/polynomial_optimization_linear.h>
+#include<mav_trajectory_generation_ros/ros_visualization.h>
+#include<mav_trajectory_generation_ros/ros_conversions.h>
+#include<mav_trajectory_generation/trajectory.h>
+#include<mav_trajectory_generation/trajectory_sampling.h>
+#include<mav_msgs/conversions.h>
+#include<mav_msgs/eigen_mav_msgs.h>
+#include<eigen_conversions/eigen_msg.h>
+#include<Eigen/Dense>
 #include<iostream>
 
 class Commander{
@@ -23,6 +33,9 @@ private:
 	ros::ServiceClient planner_service;
 	ros::ServiceClient collision_checker_service;
 	ros::Subscriber goal_sub;
+	ros::Publisher marker_pub;
+	float v_max = 2;
+	float a_max = 2;
 public:
 	geometry_msgs::Point start;
 	geometry_msgs::Point goal;
@@ -41,34 +54,19 @@ public:
 		planner_service = nh.serviceClient<drone_navigation::Planner>("rrt_planner");
 		collision_checker_service = nh.serviceClient<drone_navigation::TrajectoryQuery>("trajectory_collision_status");
 		goal_sub = nh.subscribe("/goal_for_drone", 1, &Commander::goal_callback, this);
+		marker_pub = nh.advertise<visualization_msgs::MarkerArray>("/trajectory_markers", 1);
 	}
 	~Commander(){};
 
 	void stop_motion(){
 		// publish present position as a command/trajectory
 		trajectory_msgs::MultiDOFJointTrajectory trajectory;
-		trajectory_msgs::MultiDOFJointTrajectoryPoint point;
-		geometry_msgs::Transform transform;
-		geometry_msgs::Twist vel;
-		geometry_msgs::Twist accel;
-
-		transform.translation.x = this->position.x;
-		transform.translation.y = this->position.y;
-		transform.translation.z = this->position.z;
-
-		transform.rotation = this->orientation;
-
-		point.transforms.push_back(transform);
-		point.velocities.push_back(vel);
-		point.accelerations.push_back(accel);
-		
-		trajectory.header.stamp = ros::Time::now();
 		trajectory.header.frame_id = "world";
-
-		trajectory.points.push_back(point);
-
+		trajectory.header.stamp = ros::Time::now();
+		Eigen::Vector3d position(this->position.x, this->position.y, this->position.z);
+		double yaw = 0;
+		mav_msgs::msgMultiDofJointTrajectoryFromPositionYaw(position, yaw, &trajectory); 
 		trajectory_pub.publish(trajectory);
-		ros::Duration(1.0).sleep();
 	}
 
 	void odom_callback(const nav_msgs::OdometryConstPtr& msg){
@@ -76,18 +74,6 @@ public:
 		this->orientation = msg->pose.pose.orientation;
 		if(this->goal_recieved){
 			this->monitor_collisions();
-			geometry_msgs::Point curr_target = this->path.poses[current_index].pose.position;
-			float distance = sqrt(pow(curr_target.x - this->position.x, 2) + pow(curr_target.y - this->position.y, 2) + pow(curr_target.z - this->position.z, 2));
-			if(distance < 0.25){
-				if(current_index < this->path.poses.size()){
-					current_index ++;
-				}
-				else{
-					ROS_INFO("Reached Final Goal");
-				}
-			}
-			std::cout << distance << " " << current_index << std::endl;
-			this->publish_trajectory();
 		}
 	}
 	void goal_callback(const geometry_msgs::PointConstPtr& msg){
@@ -96,9 +82,9 @@ public:
 		this->goal.z = msg->z;
 		this->goal_recieved = true;
 		this->call_planner();
+		this->publish_trajectory();
 		// set current index to zero because new path is obtained
 		this->current_index = 0;
-		this->publish_trajectory();
 		ROS_INFO("Recieved goal and called the planner");
 	}
 	void call_planner(){
@@ -110,10 +96,10 @@ public:
 		if(planner_service.call(srv)){
 			this->path = srv.response.path;
 			if(srv.response.reached){
-				ROS_INFO("Goal Reached");
+				ROS_INFO("Planner Reached Goal Endpoint");
 			}
 			else if(!srv.response.reached){
-				ROS_WARN("Goal Not Reached");
+				ROS_WARN("Goal Not Reached by Planner");
 			}
 		}
 		else {
@@ -128,28 +114,18 @@ public:
 		if(this->path.poses.size() > 0){
 
 			trajectory_msgs::MultiDOFJointTrajectory trajectory;
-			trajectory_msgs::MultiDOFJointTrajectoryPoint point;
-			geometry_msgs::Transform transform;
-			geometry_msgs::Twist vel, accel;
-
 			trajectory.header.frame_id = "world";
 			trajectory.header.stamp = ros::Time::now();
-
-			transform.translation.x = this->path.poses[current_index].pose.position.x;
-			transform.translation.y = this->path.poses[current_index].pose.position.y;
-			transform.translation.z = this->path.poses[current_index].pose.position.z;
-
-			transform.rotation.x = 0;
-			transform.rotation.y = 0;
-			transform.rotation.z = 0;
-			transform.rotation.w = 1;
-
-			point.transforms.push_back(transform);
-			point.velocities.push_back(vel);
-			point.accelerations.push_back(accel);
-			
-			trajectory.points.push_back(point);
-			this->trajectory_pub.publish(trajectory);
+			try{
+				this->optimise_trajectory(this->path, trajectory);
+				this->trajectory_pub.publish(trajectory);
+				ROS_INFO("Publishing Trajectory");
+			}
+			catch(...){
+				this->call_planner();
+				this->optimise_trajectory(this->path, trajectory);
+				ROS_ERROR("There has been an error");
+			}			
 		}
 		else {
 			ROS_WARN("Recieved an empty path");
@@ -160,14 +136,13 @@ public:
 	bool check_for_collision(){
 		// Working perfectly
 		drone_navigation::TrajectoryQuery srv;
-		geometry_msgs::PoseArray pose_array;
-		for(int i = 0;i < this->path.poses.size();i++){
-			pose_array.poses.push_back(this->path.poses[i].pose);
+		geometry_msgs::PoseArray waypoints;
+		for(int i = 0; i<this->path.poses.size(); i++){
+			waypoints.poses.push_back(this->path.poses[i].pose);
 		}
-		srv.request.waypoints = pose_array;
+		srv.request.waypoints = waypoints;
 		if(collision_checker_service.call(srv)){
-			return srv.response.collision;
-		}
+			return srv.response.collision;		}
 		else{
 			ROS_ERROR("Couldnot call Collision Checker");
 			return false;
@@ -176,14 +151,67 @@ public:
 	 void monitor_collisions(){
 	 	if(this->check_for_collision()){
 	 		this->stop_motion();
-	 		ros::Duration(1).sleep();
 	 		this->call_planner();
 	 		this->publish_trajectory();
 	 		ROS_INFO("Collision Detected");
 	 	}
-	 	else {
-	 		this->publish_trajectory();
-	 	}
+	 }
+	 void optimise_trajectory(const nav_msgs::Path& path, trajectory_msgs::MultiDOFJointTrajectory& trajectory){
+	 	const int dimension = 3;
+		const int derv = mav_trajectory_generation::derivative_order::JERK;
+
+		// vertices to use for trajectory optimisation;
+		mav_trajectory_generation::Vertex::Vector vertices;
+
+		for(int i = 0; i < path.poses.size(); i++){
+			Eigen::Affine3d pose;
+			tf::poseMsgToEigen(path.poses[i].pose, pose);
+			mav_trajectory_generation::Vertex vert(dimension);
+			if(i == 0 || i == path.poses.size() - 1){
+				vert.makeStartOrEnd(pose.translation(), derv);
+				vertices.push_back(vert);
+			}
+			else {
+				vert.addConstraint(mav_trajectory_generation::derivative_order::POSITION, pose.translation());
+				vertices.push_back(vert);
+			}
+		}
+		std::vector<double> segment_times;
+		segment_times = estimateSegmentTimes(vertices, this->v_max, this->a_max);
+
+		// set up optimisation parameters
+		mav_trajectory_generation::NonlinearOptimizationParameters params;
+
+		const int N = 10;
+		mav_trajectory_generation::PolynomialOptimizationNonLinear<N> opt(dimension, params);
+
+		opt.setupFromVertices(vertices, segment_times, derv);
+
+		opt.addMaximumMagnitudeConstraint(mav_trajectory_generation::derivative_order::VELOCITY, v_max);
+  		opt.addMaximumMagnitudeConstraint(mav_trajectory_generation::derivative_order::ACCELERATION, a_max);
+
+  		opt.optimize();
+
+  		mav_trajectory_generation::Trajectory mav_trajectory;
+  		
+  		opt.getTrajectory(&mav_trajectory);
+  		
+
+  		// publish whole trajectory
+  		mav_msgs::EigenTrajectoryPoint::Vector trajectory_points;
+  		bool status = mav_trajectory_generation::sampleWholeTrajectory(mav_trajectory, 0.01, &trajectory_points);
+
+  		msgMultiDofJointTrajectoryFromEigen(trajectory_points, &trajectory);
+  		//ROS_INFO("Trajectory optimized");
+
+  		// publish markers
+  		visualization_msgs::MarkerArray markers;
+  		double distance = 0.5;
+  		std::string frame_id = "world";
+
+  		mav_trajectory_generation::drawMavTrajectory(mav_trajectory, distance, frame_id, &markers);
+
+  		marker_pub.publish(markers);
 	 }
 };
 

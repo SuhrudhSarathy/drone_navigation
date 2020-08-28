@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import rospy
-from drone_navigation.srv import TrajectoryOptimiser, TrajectoryOptimiserRequest, TrajectoryOptimiserResponse
+from drone_navigation.srv import PathOptimiser, PathOptimiserRequest, PathOptimiserResponse
 from drone_navigation.srv import TrajectoryQuery, TrajectoryQueryRequest, TrajectoryQueryResponse
 from nav_msgs.msg import Path
 from geometry_msgs.msg import Pose, PoseArray, Point, Quaternion, PoseStamped
@@ -30,7 +30,7 @@ def collision(point1, point2):
         print("Service call failed %s"%e)
 
 def LOS_Optimiser(req):
-	resp = TrajectoryOptimiserResponse()
+	resp = PathOptimiserResponse()
 	resp.optimised_path.header = req.crude_path.header
 	path = req.crude_path.poses
 	optimised_path = [path[0]]
@@ -44,11 +44,11 @@ def LOS_Optimiser(req):
 				ind_updated = True
 				break
 		if not ind_updated:
-			resp.optimised_path.poses = BREAK_Optimiser(optimised_path)
+			resp.optimised_path.poses = optimised_path
 			#resp.optimised_path = BREAK_Optimiser(resp.optimised_path)
 			
 			return resp
-	resp.optimised_path.poses = BREAK_Optimiser(optimised_path)
+	resp.optimised_path.poses = optimised_path
 	#resp.optimised_path = BREAK_Optimiser(resp.optimised_path)
 	
 	return resp
@@ -59,7 +59,7 @@ def BREAK_Optimiser(poses):
 		pres_point = poses[i].pose.position
 		next_point = poses[i+1].pose.position
 		dist = np.sqrt((pres_point.x - next_point.x)**2 + (pres_point.y - next_point.y)**2 + (pres_point.z - next_point.z)**2)
-		n = dist/0.5
+		n = dist/1
 		incr = 1/n 
 		a = np.arange(0, 1 + incr, incr)
 		print(a)
@@ -85,7 +85,7 @@ def BREAK_Optimiser(poses):
 
 if __name__ == "__main__":
 	rospy.init_node("trajectory_optimiser")
-	traj_optimser = rospy.Service("trajectory_optimiser", TrajectoryOptimiser, LOS_Optimiser)
+	traj_optimser = rospy.Service("trajectory_optimiser", PathOptimiser, LOS_Optimiser)
 	rospy.spin()	
 
 

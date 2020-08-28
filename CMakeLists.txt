@@ -17,11 +17,11 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   pcl_ros
   geometry_msgs
-  #eigen_checks
-  #mav_trajectory_generation
-  #mav_trajectory_generation_ros
-  #mav_planning_msgs
-  
+  eigen_checks
+  mav_trajectory_generation
+  mav_trajectory_generation_ros
+  mav_planning_msgs
+  eigen_conversions
 )
 find_package(catkin_simple REQUIRED)
 # catkin_simple(ALL_DEPS_REQUIRED)
@@ -72,7 +72,7 @@ add_service_files(
    PointQuery.srv
    Planner.srv
    TrajectoryQuery.srv
-   TrajectoryOptimiser.srv
+   PathOptimiser.srv
 )
 
 ## Generate actions in the 'action' folder
@@ -87,9 +87,9 @@ generate_messages(
    DEPENDENCIES
    mav_msgs
    nav_msgs
-   std_msgs
+   std_msgs  
  )
-catkin_package(CATKIN_DEPENDS message_runtime std_msgs geometry_msgs)
+catkin_package(CATKIN_DEPENDS message_runtime std_msgs geometry_msgs mav_trajectory_generation mav_trajectory_generation_ros eigen_checks mav_planning_msgs)
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
@@ -101,6 +101,7 @@ target_link_libraries(pcl_extracter_node ${catkin_LIBRARIES})
 
 add_executable(commander_node src/commander_node.cpp)
 target_link_libraries(commander_node ${catkin_LIBRARIES})
+
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

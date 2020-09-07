@@ -8,4 +8,31 @@
 	<node name="planner" type="rrt.py" pkg="drone_navigation" output="screen"/>
 	<node name="trajectory_optimiser" type="trajectory_optimiser.py" pkg="drone_navigation" output="log"/>
 	<node name="commander" type="commander_node" pkg="drone_navigation" output="screen"/>
+
+	<!-- Voxblox related stuff -->
+	<arg name="voxel_size" default="0.20"/>
+	<arg name="voxels_per_side" default="16"/>
+	<arg name="world_frame" default="world"/>
+
+	<node name="voxblox_node" pkg="voxblox_ros" type="esdf_server" output="log">
+		<remap from="pointcloud" to="/points"/>
+		<remap from="voxblox_node/esdf_map_out" to="esdf_map"/>
+		<param name="tsdf_voxel_size" value="$(arg voxel_size)" />
+	      <param name="tsdf_voxels_per_side" value="$(arg voxels_per_side)" />
+	      <param name="publish_esdf_map" value="true" />
+	      <param name="publish_pointclouds" value="true" />
+	      <param name="use_tf_transforms" value="true" />
+	      <param name="update_mesh_every_n_sec" value="1.0" />
+	      <param name="clear_sphere_for_planning" value="true" />
+	      <param name="world_frame" value="$(arg world_frame)" />
+	</node>
+
+	<node name="voxblox_collision_checker_node" pkg="drone_navigation" type="voxblox_collision_checker_node" output="screen">
+		<remap from="odometry" to="/firefly/vi_sensor/ground_truth/odometry"/>
+		<remap from="esdf_map_in" to="esdf_map"/>
+		<param name="tsdf_voxels_per_side" value="$(arg voxels_per_side)"/>
+      	<param name="update_mesh_every_n_sec" value="0.0"/>
+      	<param name="world_frame" value="$(arg world_frame)"/>
+    </node>
+    <!-- Voxblox ends here -->
 </launch>

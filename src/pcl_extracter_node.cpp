@@ -32,21 +32,10 @@ void callback(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& msg){
 
 	pcl::VoxelGrid<pcl::PointXYZ> sor;
 	sor.setInputCloud(cloud_pt);
-	sor.setLeafSize(0.05, 0.05, 0.05);
+	sor.setLeafSize(0.1, 0.1, 0.1);
 	sor.filter(*cloud_voxel);
 
-	pcl::PointCloud<pcl::PointXYZ> cloud_out;
-	try{
-		geometry_msgs::TransformStamped transform;
-		transform = tfBuffer.lookupTransform("world", msg->header.frame_id ,ros::Time(0), ros::Duration(3.0));
-		tf::Transform tftrans;
-		tf::transformMsgToTF(transform.transform, tftrans);
-		pcl_ros::transformPointCloud(*cloud_voxel, cloud_out, tftrans);
-	}
-	catch(tf2::TransformException &ex){
-		ROS_WARN("%s", ex.what());
-	}
-	point_pub.publish(cloud_out);
+	point_pub.publish(cloud_voxel);
 }
 
 int main(int argv, char** argc){

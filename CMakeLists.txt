@@ -22,6 +22,8 @@ find_package(catkin REQUIRED COMPONENTS
   mav_trajectory_generation_ros
   mav_planning_msgs
   eigen_conversions
+  voxblox
+  voxblox_ros
 )
 find_package(catkin_simple REQUIRED)
 # catkin_simple(ALL_DEPS_REQUIRED)
@@ -89,7 +91,7 @@ generate_messages(
    nav_msgs
    std_msgs  
  )
-catkin_package(CATKIN_DEPENDS message_runtime std_msgs geometry_msgs mav_trajectory_generation mav_trajectory_generation_ros eigen_checks mav_planning_msgs)
+catkin_package(CATKIN_DEPENDS message_runtime std_msgs geometry_msgs mav_trajectory_generation mav_trajectory_generation_ros eigen_checks mav_planning_msgs voxblox voxblox_ros)
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
@@ -102,6 +104,11 @@ target_link_libraries(pcl_extracter_node ${catkin_LIBRARIES})
 add_executable(commander_node src/commander_node.cpp)
 target_link_libraries(commander_node ${catkin_LIBRARIES})
 
+add_executable(voxblox_collision_checker_node src/voxblox_collision_checker_node.cpp)
+target_link_libraries(voxblox_collision_checker_node ${catkin_LIBRARIES})
+
+add_executable(incremental_graph src/planners/incremental_graph.cpp)
+target_link_libraries(incremental_graph ${catkin_LIBRARIES})
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

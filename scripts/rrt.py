@@ -59,7 +59,7 @@ def lineTo(node, nearest_node, delta, dim=2):
 
 def collision(point1, point2):
     ## Collision service call
-    rospy.wait_for_service("trajectory_collision_status")
+    rospy.wait_for_service("voxblox_trajectory_collision_check")
     try:
         request = TrajectoryQueryRequest()
         if isinstance(point1, Node):
@@ -70,7 +70,7 @@ def collision(point1, point2):
             pose2 = Pose(position = Point(point2[1], point2[2], point2[2]), orientation = Quaternion(0, 0, 0, 1))
 
         request.waypoints = PoseArray(poses = [pose1, pose2])
-        service = rospy.ServiceProxy("trajectory_collision_status", TrajectoryQuery)
+        service = rospy.ServiceProxy("voxblox_trajectory_collision_check", TrajectoryQuery)
 
         resp = service(request)
         if resp.collision == True:
@@ -112,7 +112,7 @@ class RRT():
         response = PlannerResponse()
         
         rospy.loginfo("Planner called from [%f %f %f] to [%f %f %f]"%(req.start.x, req.start.z, req.start.z, req.goal.x, req.goal.y, req.goal.z))
-        n_iters = 1000
+        n_iters = 10000
         sample_area = [[-5 + self.start.x, 5 + self.goal.x], [-5 + self.start.y, 5 + self.goal.y], [-2 + self.start.z,  2 + self.goal.z]]
         #Run till tne number of iterations are not reached
         time1 = time.time()
@@ -148,6 +148,9 @@ class RRT():
             if abs(node.x - self.goal.x) < 0.01 and abs(node.y - self.goal.y) < 0.01 and abs(node.z - self.goal.z) < 0.01:
                 #print("goal reached")
                 response.reached = True
+                break
+            if distance(node, self.start, dim=self.dim) > 3.0:
+                response.reached = False
                 break
             if self.animation:
                 self.animate()

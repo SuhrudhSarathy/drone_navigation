@@ -59,7 +59,9 @@ def lineTo(node, nearest_node, delta, dim=2):
 
 def collision(point1, point2):
     ## Collision service call
-    rospy.wait_for_service("trajectory_collision_status")
+    global service
+    rospy.wait_for_service("voxblox_trajectory_collision_check")
+    print("done waiting")
     try:
         request = TrajectoryQueryRequest()
         if isinstance(point1, Node):
@@ -69,8 +71,7 @@ def collision(point1, point2):
             pose1 = Pose(position = Point(point1[0], point1[1], point1[2]), orientation = Quaternion(0, 0, 0, 1))
             pose2 = Pose(position = Point(point2[1], point2[2], point2[2]), orientation = Quaternion(0, 0, 0, 1))
 
-        request.waypoints = PoseArray(poses = [pose1, pose2])
-        service = rospy.ServiceProxy("trajectory_collision_status", TrajectoryQuery)
+        request.waypoints = PoseArray(poses = [pose1, pose2])       
 
         resp = service(request)
         if resp.collision == True:
@@ -98,13 +99,14 @@ class RRT():
         self.alpha = 0.5
         self.animation = animation
         self.dim = dim
-        self.planning_service = rospy.Service("rrt_planner", Planner, self.__call__)
+        self.planning_service = rospy.Service("rrt_planner_service", Planner, self.__call__)
         self.path_pub = rospy.Publisher("/rrt_path", Path, queue_size=10)
         self.optimiser = rospy.ServiceProxy("trajectory_optimiser", PathOptimiser)
         self.optim_path_pub = rospy.Publisher("optim_path", Path, queue_size=10)
         
 
     def __call__(self, req):
+    	rospy.loginfo("main function called")
         self.start = Node(req.start.x, req.start.y, req.start.z)
         self.goal = Node(req.goal.x, req.goal.y, req.goal.z)
         self.tree = [self.start]
@@ -112,7 +114,7 @@ class RRT():
         response = PlannerResponse()
         
         rospy.loginfo("Planner called from [%f %f %f] to [%f %f %f]"%(req.start.x, req.start.z, req.start.z, req.goal.x, req.goal.y, req.goal.z))
-        n_iters = 1000
+        n_iters = 10000
         sample_area = [[-5 + self.start.x, 5 + self.goal.x], [-5 + self.start.y, 5 + self.goal.y], [-2 + self.start.z,  2 + self.goal.z]]
         #Run till tne number of iterations are not reached
         time1 = time.time()
@@ -122,6 +124,7 @@ class RRT():
 
             #look for the nearest node in the tree 
             nearest_node = nn(node, self.tree)
+            print(n_iters)
 
             # If distacne to the the nearest node is greater than the threshold
 
@@ -149,10 +152,12 @@ class RRT():
                 #print("goal reached")
                 response.reached = True
                 break
+   
             if self.animation:
                 self.animate()
             # Count iteration as done
             n_iters -= 1
+            print(n_iters)
 
         #print([(node.x, node.y, node.z) for node in self.tree])
         
@@ -241,4 +246,5 @@ if __name__ == "__main__":
     rospy.init_node("planner")
     path_planner = RRT(dim=3)
     rospy.loginfo("Path Planning Service Initiated")
+    service = rospy.ServiceProxy("voxblox_trajectory_collision_check", TrajectoryQuery)
     rospy.spin()

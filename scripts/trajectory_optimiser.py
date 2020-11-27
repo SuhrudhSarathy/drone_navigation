@@ -9,7 +9,7 @@ import numpy as np
 
 def collision(point1, point2):
     ## Collision service call
-    rospy.wait_for_service("trajectory_collision_status")
+    rospy.wait_for_service("voxblox_trajectory_collision_status")
     try:
         request = TrajectoryQueryRequest()
         if isinstance(point1, Point):
@@ -20,7 +20,7 @@ def collision(point1, point2):
             pose2 = Pose(position = Point(point2[1], point2[2], point2[2]), orientation = Quaternion(0, 0, 0, 1))
 
         request.waypoints = PoseArray(poses = [pose1, pose2])
-        service = rospy.ServiceProxy("trajectory_collision_status", TrajectoryQuery)
+        service = rospy.ServiceProxy("voxblox_trajectory_collision_status", TrajectoryQuery)
         resp = service(request)
         if resp.collision == True:
             return True
@@ -30,6 +30,7 @@ def collision(point1, point2):
         print("Service call failed %s"%e)
 
 def LOS_Optimiser(req):
+	rospy.loginfo("path_optimiser called")
 	resp = PathOptimiserResponse()
 	resp.optimised_path.header = req.crude_path.header
 	path = req.crude_path.poses
@@ -85,7 +86,7 @@ def BREAK_Optimiser(poses):
 
 if __name__ == "__main__":
 	rospy.init_node("trajectory_optimiser")
-	traj_optimser = rospy.Service("trajectory_optimiser", PathOptimiser, LOS_Optimiser)
+	traj_optimser = rospy.Service("path_optimiser", PathOptimiser, LOS_Optimiser)
 	rospy.spin()	
 
 

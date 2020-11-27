@@ -1,7 +1,6 @@
 #include<ros/ros.h>
 #include<nav_msgs/Path.h>
 #include<nav_msgs/Odometry.h>
-#include<drone_navigation/TrajectoryQuery.h>
 #include<drone_navigation/Planner.h>
 #include<geometry_msgs/Point.h>
 #include<geometry_msgs/Transform.h>
@@ -49,10 +48,10 @@ public:
 	Commander(){
 
 		odom_sub = nh.subscribe("/firefly/vi_sensor/ground_truth/odometry", 1, &Commander::odom_callback, this);
-		trajectory_pub = nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/firefly/command/trajectory", 1);
+		trajectory_pub = nh.advertise<trajectory_msgs::MultiDOFJointTrajectory>("/firefly/command/trajectory", 50);
 		//pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/firefly/command/pose", 1);
-		planner_service = nh.serviceClient<drone_navigation::Planner>("rrt_planner");
-		collision_checker_service = nh.serviceClient<drone_navigation::TrajectoryQuery>("trajectory_collision_status");
+		planner_service = nh.serviceClient<drone_navigation::Planner>("rrt_planner_cpp_service");
+		collision_checker_service = nh.serviceClient<drone_navigation::TrajectoryQuery>("voxblox_trajectory_collision_status");
 		goal_sub = nh.subscribe("/goal_for_drone", 1, &Commander::goal_callback, this);
 		marker_pub = nh.advertise<visualization_msgs::MarkerArray>("/trajectory_markers", 1);
 	}
@@ -136,13 +135,15 @@ public:
 	bool check_for_collision(){
 		// Working perfectly
 		drone_navigation::TrajectoryQuery srv;
+		//srv.request.point = this->position;
 		geometry_msgs::PoseArray waypoints;
-		for(int i = 0; i<this->path.poses.size(); i++){
+		for(int i = 0 ; i <this->path.poses.size(); i++){
 			waypoints.poses.push_back(this->path.poses[i].pose);
 		}
 		srv.request.waypoints = waypoints;
 		if(collision_checker_service.call(srv)){
-			return srv.response.collision;		}
+			return srv.response.collision;
+		}
 		else{
 			ROS_ERROR("Couldnot call Collision Checker");
 			return false;
@@ -150,7 +151,7 @@ public:
 	}
 	 void monitor_collisions(){
 	 	if(this->check_for_collision()){
-	 		this->stop_motion();
+	 		//this->stop_motion();
 	 		this->call_planner();
 	 		this->publish_trajectory();
 	 		ROS_INFO("Collision Detected");
